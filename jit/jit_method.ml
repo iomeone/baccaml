@@ -315,10 +315,10 @@ let run
     }
   in
   let trace = mj prog reg mem env fenv body in
-  create_fundef
+  `Result (create_fundef
     ~name:(Id.L env.trace_name)
     ~args:reds
     ~fargs:[]
     ~body:trace
-    ~ret:Type.Int
+    ~ret:Type.Int, None)
 ;;

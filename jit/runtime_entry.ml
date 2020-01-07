@@ -28,7 +28,7 @@ module Util = struct
   ;;
 
   let find_mj_entries bytecode =
-    let annot_mj_comp = 21 in
+    let annot_mj_comp = 25 in
     List.map
       fst
       (List.find_all
@@ -167,9 +167,11 @@ let jit_method ({ bytecode; stack; pc; sp; bc_ptr; st_ptr } as runtime_env) prog
       ~merge_pc:pc
       ~bytecode
   in
-  let trace = JM.run prog reg mem env in
+  let `Result (trace, others) = JM.run prog reg mem env in
   Debug.with_debug (fun _ -> print_fundef trace);
-  emit_and_compile prog `Meta_method trace
+  match others with
+  | None -> emit_and_compile prog `Meta_tracing trace
+  | Some others -> emit_and_compile_with_so prog `Meta_tracing others trace
 ;;
 
 let jit_tracing
@@ -193,8 +195,7 @@ let jit_tracing
       ~bytecode
   in
   let (`Result (trace, others)) = JT.run prog reg mem env in
-  (* Debug.with_debug (fun _ -> print_fundef trace); *)
-  print_fundef trace;
+  Debug.with_debug (fun _ -> print_fundef trace);
   match others with
   | None -> emit_and_compile prog `Meta_tracing trace
   | Some others -> emit_and_compile_with_so prog `Meta_tracing others trace
@@ -280,24 +281,14 @@ let jit_method_call bytecode stack pc sp bc_ptr st_ptr =
 ;;
 
 let jit_gen_trace bytecode stack pc sp bc_ptr st_ptr =
-  let parse_str_list str = String.split_on_char ',' str in
-  let int_of_str_lsit lst = List.map int_of_string lst in
   let jit_apply f pcs =
-    List.iter (fun pc -> f bytecode stack pc sp bc_ptr st_ptr) pcs
+    List.iter (fun pc -> f bytecode stack (pc+1) sp bc_ptr st_ptr) pcs
   in
-  let tj_pcs =
-    Option.fold
-      ~none:[]
-      ~some:(fun str -> parse_str_list str |> int_of_str_lsit)
-      (Sys.getenv_opt "TJ_ENTRIES")
-  in
-  let mj_pcs =
-    Option.fold
-      ~none:[]
-      ~some:(fun str -> parse_str_list str |> int_of_str_lsit)
-      (Sys.getenv_opt "MJ_ENTRIES")
-  in
-  tj_pcs |> jit_apply jit_tracing_gen_trace;
+  let tj_pcs = Util.find_tj_entries bytecode in
+  let mj_pcs = Util.find_mj_entries bytecode in
+  Debug.print_int_arr bytecode;
+  mj_pcs |> jit_apply jit_method_gen_trace;
+  (* tj_pcs |> jit_apply jit_tracing_gen_trace; *)
   ()
 ;;
 
@@ -308,6 +299,7 @@ let callbacks () =
   Callback.register "jit_tracing_entry" jit_tracing_entry;
   Callback.register "jit_tracing_exec" jit_tracing_exec;
   Callback.register "jit_method_call" jit_method_call;
+  Callback.register "jit_setup" jit_gen_trace;
   register_interp_ir ();
   ()
 ;;
