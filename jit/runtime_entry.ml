@@ -112,12 +112,12 @@ module Util = struct
   ;;
 
   let%test "find_mj_entries test" =
-    let bytecode = Array.init 100 (fun i -> if i mod 42 = 0 then 21 else i) in
+    let bytecode = Array.init 100 (fun i -> if i mod 42 = 0 then 25 else i) in
     let expected =
       bytecode
       |> Array.to_list
       |> List.mapi (fun i x -> i, x)
-      |> List.find_all (fun (i, x) -> x = 21)
+      |> List.find_all (fun (i, x) -> x = 25)
       |> List.map fst
     in
     find_mj_entries bytecode = expected
