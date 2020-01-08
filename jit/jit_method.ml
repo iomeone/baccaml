@@ -111,6 +111,8 @@ end = struct
   ;;
 end
 
+let other_deps : string list ref = ref []
+
 let rec mj
     p
     reg
@@ -146,14 +148,22 @@ let rec mj
         ( (x, typ)
         , CallDir (Id.L trace_name, reds, fargs)
         , mj p reg mem env fenv body )
-    else
-      Jit_guard.restore
-        reg
-        ~args
-        (Let
-           ( (x, typ)
-           , CallDir (Id.L "interp_no_hints", args, fargs)
-           , mj p reg mem env fenv body ))
+    else (
+      match Method_prof.find_opt pc with
+      | Some tname ->
+        other_deps := !other_deps @ [ tname ];
+        Let
+          ( (x, typ)
+          , CallDir (Id.L tname, reds, fargs)
+          , mj p reg mem env fenv body )
+      | None ->
+        Jit_guard.restore
+          reg
+          ~args
+          (Let
+             ( (x, typ)
+             , CallDir (Id.L "interp_no_hints", args, fargs)
+             , mj p reg mem env fenv body )))
   | Let ((x, typ), CallDir (Id.L "min_caml_gaurd_promote", args, fargs), body)
     ->
     mj p reg mem env fenv body
@@ -259,8 +269,8 @@ and mj_if p reg mem ({ index_pc; merge_pc; trace_name; bytecode } as env) fenv =
         match id_or_imm with V x -> reg.(int_of_id_t x) | C n -> Green n
       in
       let n1, n2 = value_of r1, value_of r2 in
-      Log.debug
-      @@ sp "If (%s, %s) ==> %d %d" id_t (string_of_id_or_imm id_or_imm) n1 n2;
+      (* Log.debug
+       * @@ sp "If (%s, %s) ==> %d %d" id_t (string_of_id_or_imm id_or_imm) n1 n2; *)
       if exp <=> (n1, n2)
       then mj p reg mem env fenv t1
       else mj p reg mem env fenv t2)
@@ -315,10 +325,12 @@ let run
     }
   in
   let trace = mj prog reg mem env fenv body in
-  `Result (create_fundef
-    ~name:(Id.L env.trace_name)
-    ~args:reds
-    ~fargs:[]
-    ~body:trace
-    ~ret:Type.Int, None)
+  `Result
+    ( create_fundef
+        ~name:(Id.L env.trace_name)
+        ~args:reds
+        ~fargs:[]
+        ~body:trace
+        ~ret:Type.Int
+    , Some !other_deps )
 ;;
