@@ -12,10 +12,7 @@ let create_static_dir _ =
   let mkdir () = Unix.system (sp "mkdir %s" static_dir) |> ignore in
   let rmdir () = Unix.system (sp "rm -rf %s" static_dir) |> ignore in
   try
-    if Sys.is_directory static_dir
-    then (
-      rmdir ();
-      mkdir ())
+    ignore (Sys.is_directory static_dir)
   with
   | Sys_error _ -> mkdir ()
 ;;
@@ -59,14 +56,19 @@ let compile_dyn trace_name =
 let compile_dyn_with_so tname others =
   let asm = tname ^ ".s" in
   let so = get_so_name tname in
-  let other_archives =
-    others |> List.map (fun so -> "-l" ^ so) |> String.concat " "
+  (* let other_archives =
+   *   others |> List.map (fun so -> "-l" ^ so) |> String.concat " "
+   * in
+   * sp
+   *   "gcc -m32 -g -o %s %s -shared -fPIC -DRUNTIME -ldl -L./_static %s"
+   *   so
+   *   asm
+   *   other_archives *)
+  let cmd =
+    sp "gcc -m32 -g -o %s %s -shared -fPIC -ldl %s"
+      so asm (others |> List.map (fun so -> "./"^so^".o") |> String.concat " ")
   in
-  sp
-    "gcc -m32 -g -o %s %s -shared -fPIC -DRUNTIME -ldl -L./_static %s"
-    so
-    asm
-    other_archives
+  cmd
   |> Unix.system
   |> function
   | Unix.WEXITED i when i = 0 -> Ok tname
