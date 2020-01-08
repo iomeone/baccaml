@@ -8,7 +8,7 @@ open Printf
 module JO = Jit_optimizer
 
 let sp = sprintf
-let other_deps : string list option ref = ref None
+let other_deps : string list ref = ref []
 let re_entry = ref false
 let interp_fundef p = Fundef.find_fuzzy p "interp"
 
@@ -105,7 +105,7 @@ and tj_exp
     let pc = Util.get_by_index reg args' index_pc in
     (match Method_prof.find_opt pc with
     | Some tname ->
-      other_deps := Option.bind !other_deps (fun x -> Some (x @ [ tname ]));
+        other_deps := !other_deps @ [ tname ];
       Let
         ( (dest, typ)
         , CallDir (Id.L tname, Util.filter ~reds:red_names args', fargs')
@@ -283,5 +283,5 @@ let run p reg mem ({ trace_name; red_names; merge_pc } as env) =
       ; ret = Type.Int
       ; args = Util.filter ~reds:red_names args'
       }
-    , !other_deps )
+    , Some !other_deps )
 ;;
